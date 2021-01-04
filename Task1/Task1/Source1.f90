@@ -1,21 +1,21 @@
     use ivprk_int
-    !use ivpag_int
-    !use umach_int
+    use ivpag_int
+    use umach_int
     !use sset_int
     
     implicit none
     include 'link_fnl_shared_imsl.h'
     
     integer i, N, ido,istep, nout, mxparm, j
-    parameter (mxparm=50, N = 10)
+    parameter (mxparm=50, N = 20)
     
     !INTEGER MABSE, MBDF, MSOLVE
     !PARAMETER (MABSE=1, MBDF=2, MSOLVE=2)
     
-    real A(1,1), param(mxparm), tend, tol, MABSE, MBDF, MSOLVE
-    real fi, h, L, T, v(N), error(N), error_ivprk(N), error_ivpag(N), max_err_ivprk, u(N, N), max_err_ivpag
+    real A(N,N), param(mxparm), tend, tol, MABSE, MBDF, MSOLVE, param2(mxparm)
+    real fi, h, L, T, v(N), error(N), error_ivprk(N), error_ivpag(N), max_err_ivprk, u(N, N), max_err_ivpag, T_max, h_time
     
-    external SSET, IVPAG, UMACH, FCN, FCNJ
+    external SSET, FCN, FCNJ
     
     call umach (2, nout)
     
@@ -24,9 +24,11 @@
     MSOLVE=2.0
     
     L = 1.0
+    T_max = 1.0
     T = 0.0
     
     h = L/N
+    h_time = T_max / N
     
     !test 1
     !do i = 1, N
@@ -41,17 +43,25 @@
     !do i = 1, N
     !    v(i) =  h * i
     !    do j = 1, N
-    !        u(i, j) =  h * i * exp(j * 1.0)
+    !        u(i, j) =  h * i * exp(j * h_time)
     !    end do
     !end do
     
     !test 3
-    do i = 1, N
-        v(i) =  0.0
-        do j = 1, N
-            u(i, j) =  h * i * j * 1.0
-        end do
-    end do
+    !do i = 1, N
+    !    v(i) =  h * i
+    !    do j = 1, N
+    !        u(i, j) =  h * i * exp(- j * h_time)
+    !    end do
+    !end do
+    
+    !test 3
+    !do i = 1, N
+    !    v(i) =  0.0
+    !    do j = 1, N
+    !        u(i, j) =  h * i * j * h_time
+    !    end do
+    !end do
     
     !test 4
     !do i = 1, N
@@ -61,10 +71,18 @@
     !    end do
     !end do
     
+    !test 5
+    do i = 1, N
+         v(i) =  sin(h * i)
+       do j = 1, N
+            u(i, j) =  sin(h * i) * exp(- j * h_time)
+        end do
+    end do
     
     tol = 0.005
     
     CALL SSET (MXPARM, 0.0, PARAM, 1)
+    CALL SSET (MXPARM, 0.0, PARAM2, 1)
 
     param(10) = 1.0
     
@@ -79,11 +97,11 @@
 
       istep = istep + 1
 
-      tend = istep
+      tend = h_time * istep
 
       CALL IVPRK (ido, FCN, T, tend, v, TOL=tol, PARAM=param)
 
-      IF (istep .LE. 10) THEN
+      IF (istep .LE. N) THEN
 
          WRITE (nout,'(I6,11F12.3)') istep, T, v
          do i = 1, N
@@ -93,7 +111,7 @@
 
 !                                 Final call to release workspace
 
-         IF (istep .EQ. 10) ido = 3
+         IF (istep .EQ. N) ido = 3
               
 
          GO TO 10
@@ -121,17 +139,25 @@
     !do i = 1, N
     !    v(i) =  h * i
     !    do j = 1, N
-    !        u(i, j) =  h * i * exp(j * 1.0)
+    !        u(i, j) =  h * i * exp(j * h_time)
+    !    end do
+    !end do
+      
+    !test 3
+    !do i = 1, N
+    !    v(i) =  h * i
+    !    do j = 1, N
+    !        u(i, j) =  h * i * exp(- j * h_time)
     !    end do
     !end do
     
     !test 3
-    do i = 1, N
-        v(i) =  0.0
-        do j = 1, N
-            u(i, j) =  h * i * j 
-        end do
-    end do
+    !do i = 1, N
+    !    v(i) =  0.0
+    !    do j = 1, N
+    !        u(i, j) =  h * i * j * h_time
+    !    end do
+    !end do
     
     !test 4
     !do i = 1, N
@@ -141,9 +167,18 @@
     !    end do
     !end do
       
-      param(10) = MABSE
-      param(12) = MBDF
-      param(13) = MSOLVE
+    !test 5
+    do i = 1, N
+         v(i) =  sin(h * i)
+       do j = 1, N
+            u(i, j) =  sin(h * i) * exp(- j * h_time)
+        end do
+    end do
+      
+      param2(10) = MABSE
+      param2(12) = 2
+      param2(13) = 1
+      param2(19) = 0
       
       WRITE (nout,99998)
       
@@ -152,19 +187,19 @@
       WRITE (nout,'(I6,11F12.3)') istep, T, v
    11 CONTINUE
       istep = istep + 1
-      tend = istep
+      tend = h_time * istep
       
-      CALL IVPAG (ido, N, FCN, FCNJ, A, T, tend, tol, param, v)
-      IF (istep .LE. 10) THEN
+      CALL IVPAG (ido, FCN, FCNJ, T, tend, v, TOL=tol, PARAM=param2)
+      IF (istep .LE. N) THEN
           WRITE (nout,'(I6,11F12.3)') istep, T, v
           do i = 1, N
              error(i) = abs(u(i, istep) - v(i))
         end do
          error_ivpag(istep) = maxval(error)
-          IF (istep .EQ. 10) ido = 3
+          IF (istep .EQ. N) ido = 3
           GO TO 11
     END IF
-    WRITE (nout,99999) param(35)
+    WRITE (nout,99999) param2(35)
     max_err_ivpag = maxval(error_ivpag)
     WRITE (nout,*) 'Max approximate error = ', max_err_ivpag
       
@@ -180,6 +215,8 @@
       real p, k_test, q_test, f_test, nu(2)
       
       real k(N), f(N), q(N), h2(N)
+      
+      !external COS
       
       h = L/N
     
@@ -204,11 +241,20 @@
       !nu(2) = 5.0 * exp(T)
       
       !test 3
-      k_test = 5.0
-      q_test = 0.0
-      f_test = 0.0
-      nu(1) = 5.0 * T
-      nu(2) = 5.0 * T
+      !k_test = 5.0
+      !q_test = 1.0
+      !f_test = 0.0
+      !nu(1) = 5.0 * exp(- T)
+      !nu(2) = 5.0 * exp(- T)
+      
+      
+      !!test 3
+      !  k_test = 5.0
+      !  !q_test = -1.0 * (T ** (-1.0))
+      !  q_test = 0.0
+      !  f_test = 0.0
+      !  nu(1) = 5.0 * T
+      !  nu(2) = 5.0 * T
       
       !test 4
       !k_test = 5.0
@@ -216,12 +262,20 @@
       !f_test = 0.0
       !nu(1) = 0.0
       !nu(2) = 0.0
+      
+      !test 5
+      k_test = 2.0
+      q_test = - 1.0
+      f_test = 0.0
+      nu(1) = 2.0 * exp(-T)
+      nu(2) = 0.0
     
       p = h
       do i = 1, N
           k(i) = k_test
           q(i) = q_test
-          f(i) = h * i
+          f(i) = f_test
+          !f(i) = i * h
       end do
       
       
@@ -245,6 +299,8 @@
         real p, k_test, q_test, f_test, nu(2)
       
         real k(N), f(N), q(N), h2(N)
+        
+        !external COS
       
         h = L/N
     
@@ -269,11 +325,19 @@
         !nu(2) = 5.0 * exp(T)
         
         !test 3
-        k_test = 5.0
-        q_test = 0.0
-        f_test = 0.0
-        nu(1) = 5.0 * T
-        nu(2) = 5.0 * T
+        !k_test = 5.0
+        !q_test = 1.0
+        !f_test = 0.0
+        !nu(1) = 5.0 * exp(- T)
+        !nu(2) = 5.0 * exp(- T)
+        
+        !test 3
+        !k_test = 5.0
+        !!q_test = -1.0 * (T ** (-1.0))
+        !q_test = 0.0
+        !f_test = 0.0
+        !nu(1) = 5.0 * T
+        !nu(2) = 5.0 * T
         
         !test 4
         !k_test = 5.0
@@ -282,11 +346,19 @@
         !nu(1) = 0.0
         !nu(2) = 0.0
         
+        !test 5
+        k_test = 2.0
+        q_test = - 1.0
+        f_test = 0.0
+        nu(1) = 2.0 * exp(-T)
+        nu(2) = 0.0
+        
         p = h
         do i = 1, N
             k(i) = k_test
             q(i) = q_test
-            f(i) = h * i
+            f(i) = f_test
+            !f(i) = h * i
         end do
         
         CALL SSET (N**2, 0.0, DYPDY, 1)
@@ -295,13 +367,14 @@
         DYPDY(1,2) = (k(1) / (h2(1) * p))
         
         do i = 2, N-1
-            DYPDY(i, i-1) = - k(i-1) / (h2(i) * p)
+            DYPDY(i, i-1) = k(i-1) / (h2(i) * p)
             DYPDY(i, i) = (- k(i+1) / (h2(i) * p)) - (k(i-1) / (h2(i) * p)) - q(i)
             DYPDY(i, i+1) = k(i+1) / (h2(i) * p)
+            
         end do
         
         DYPDY(N,N-1) = k(N-1) / (h2(N) * p)
-        DYPDY(N,N) = (-k(N) / (h2(N) * p)) - q(N)
+        DYPDY(N,N) = (-k(N-1) / (h2(N) * p)) - q(N)
 
         RETURN
     END
